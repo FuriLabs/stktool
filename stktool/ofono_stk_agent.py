@@ -125,7 +125,7 @@ class StkAgent(dbus.service.Object):
                     in_signature="sy", out_signature="")
     def DisplayActionInformation(self, text, icon):
         # print(f"DisplayActionInformation: text: {text}, icon: {icon}")
-        self.window.show_action_info_page(text)
+        self.window.show_action_info_popup(text)
 
     @dbus.service.method("org.ofono.SimToolkitAgent",
                     in_signature="sy", out_signature="")

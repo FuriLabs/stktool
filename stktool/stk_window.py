@@ -101,7 +101,7 @@ class StkWindow(Adw.ApplicationWindow):
             self.listbox.select_row(self.listbox.get_row_at_index(0))
 
     def property_changed(self, name, value):
-        print(f"property changed: name: {name}, value: {value}")
+        # print(f"property changed: name: {name}, value: {value}")
         self.properties[name] = value
         GLib.idle_add(self.update_ui)
 
@@ -381,8 +381,17 @@ class StkWindow(Adw.ApplicationWindow):
         dialog = Adw.MessageDialog.new(self)
         dialog.set_heading(title)
 
+        body_text = ""
         if info:
-            dialog.set_body(info)
+            body_text += info
+        if url:
+            if body_text:
+                body_text += "\n\n"
+            body_text += f"URL: {url}"
+
+        if body_text:
+            dialog.set_body(body_text)
+
         dialog.add_response("no", ("No"))
 
         dialog.add_response("yes", ("Yes"))
@@ -399,88 +408,53 @@ class StkWindow(Adw.ApplicationWindow):
         dialog.present()
 
     def show_tone_page(self, tone, text):
-        page = Adw.NavigationPage(title="Playing Tone")
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        page.set_child(box)
+        dialog = Adw.MessageDialog.new(self)
+        dialog.set_heading(text)
 
-        status_page = Adw.StatusPage(
-            title="Playing Tone",
-            description=f"Tone: {tone}\nText: {text}"
-        )
-        box.append(status_page)
+        if tone:
+            dialog.set_body(tone)
 
-        button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        button_box.set_halign(Gtk.Align.END)
-        box.append(button_box)
+        dialog.add_response("end", ("End Tone"))
+        dialog.set_default_response("end")
+        dialog.set_close_response("end")
 
-        end_tone_button = Gtk.Button(label="End Tone")
-        button_box.append(end_tone_button)
+        def on_response(dialog, response):
+            pass
 
-        def on_end_tone_clicked(button):
-            self.navigation_view.pop()
-
-        end_tone_button.connect("clicked", on_end_tone_clicked)
-
-        self.navigation_view.push(page)
-
-        # maybe? i don't actually know how this should behave
-        GLib.timeout_add_seconds(5, lambda: self.navigation_view.pop() or True)
+        dialog.connect("response", on_response)
+        dialog.present()
 
     def show_loop_tone_page(self, tone, text, reply_func, error_func):
-        page = Adw.NavigationPage(title="Looping Tone")
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        page.set_child(box)
+        dialog = Adw.MessageDialog.new(self)
+        dialog.set_heading(text)
 
-        status_page = Adw.StatusPage(
-            title="Looping Tone",
-            description=f"Tone: {tone}\nText: {text}"
-        )
-        box.append(status_page)
+        if tone:
+            dialog.set_body(tone)
 
-        button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        button_box.set_halign(Gtk.Align.END)
-        box.append(button_box)
+        dialog.add_response("wait", ("Wait"))
 
-        end_tone_button = Gtk.Button(label="End Tone")
-        wait_button = Gtk.Button(label="Wait")
-        button_box.append(end_tone_button)
-        button_box.append(wait_button)
+        dialog.add_response("end", ("End Tone"))
+        dialog.set_default_response("end")
+        dialog.set_close_response("end")
 
-        def on_end_tone_clicked(button):
-            self.navigation_view.pop()
-            GLib.idle_add(reply_func)
+        def on_response(dialog, response):
+            if response == "wait":
+                GLib.idle_add(reply_func, True)
+            else:
+                GLib.idle_add(reply_func, False)
 
-        def on_wait_clicked(button):
-            self.navigation_view.pop()
-            self.timeout_reply_handler = reply_func
-            self.timeout_id = GLib.timeout_add_seconds(60, self.timeout_callback)
+        dialog.connect("response", on_response)
+        dialog.present()
 
-        end_tone_button.connect("clicked", on_end_tone_clicked)
-        wait_button.connect("clicked", on_wait_clicked)
+    def show_action_info_popup(self, text):
+        dialog = Adw.MessageDialog.new(self)
+        dialog.set_heading(text)
 
-        self.navigation_view.push(page)
+        dialog.add_response("ok", ("OK"))
+        dialog.set_default_response("ok")
+        dialog.set_close_response("ok")
 
-    def show_action_info_page(self, text):
-        page = Adw.NavigationPage(title="Action Information")
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        page.set_child(box)
-
-        status_page = Adw.StatusPage(
-            title="Action Information",
-            description=f"Text: {text}"
-        )
-        box.append(status_page)
-
-        button = Gtk.Button(label="OK")
-        button.set_halign(Gtk.Align.CENTER)
-        box.append(button)
-
-        def on_ok_clicked(button):
-            self.navigation_view.pop()
-
-        button.connect("clicked", on_ok_clicked)
-
-        self.navigation_view.push(page)
+        dialog.present()
 
     def show_action_page(self, text):
         page = Adw.NavigationPage(title="Action")
