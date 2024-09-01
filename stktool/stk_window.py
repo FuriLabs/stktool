@@ -43,6 +43,7 @@ class StkWindow(Adw.ApplicationWindow):
 
         button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         button_box.set_margin_top(12)
+        button_box.set_margin_bottom(24)
         button_box.set_halign(Gtk.Align.CENTER)
         self.main_box.append(button_box)
 
@@ -94,7 +95,7 @@ class StkWindow(Adw.ApplicationWindow):
             while (row := self.listbox.get_row_at_index(0)) is not None:
                 self.listbox.remove(row)
             for index, item in enumerate(self.properties["MainMenu"]):
-                row = Adw.ActionRow(title=item[0], subtitle=f"Option {index + 1}")
+                row = Adw.ActionRow(title=item[0])
                 self.listbox.append(row)
 
         if self.listbox.get_row_at_index(0):
@@ -170,7 +171,7 @@ class StkWindow(Adw.ApplicationWindow):
         box.append(listbox)
 
         for i, item in enumerate(items):
-            row = Adw.ActionRow(title=item[0], subtitle=f"Option {i + 1}")
+            row = Adw.ActionRow(title=item[0])
             listbox.append(row)
 
         if 0 <= default < len(items):
@@ -284,21 +285,33 @@ class StkWindow(Adw.ApplicationWindow):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         page.set_child(box)
 
+        status_page = Adw.StatusPage()
+        status_page.set_title(title)
+        box.append(status_page)
+
+        scrolled_window = Gtk.ScrolledWindow()
+        scrolled_window.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scrolled_window.set_min_content_height(400)
+        scrolled_window.set_vexpand(True)
+        box.append(scrolled_window)
+
         listbox = Gtk.ListBox()
         listbox.set_selection_mode(Gtk.SelectionMode.SINGLE)
         listbox.add_css_class("boxed-list")
-        box.append(listbox)
+        scrolled_window.set_child(listbox)
 
         for i, item in enumerate(items):
-            row = Adw.ActionRow(title=item[0], subtitle=f"Option {i + 1}")
+            row = Adw.ActionRow(title=item[0])
             listbox.append(row)
 
         if 0 <= default < len(items):
             listbox.select_row(listbox.get_row_at_index(default))
+            status_page.set_description(items[default][0])
 
         button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         button_box.set_halign(Gtk.Align.CENTER)
         button_box.set_margin_top(12)
+        button_box.set_margin_bottom(24)
         box.append(button_box)
 
         ok_button = Gtk.Button(label="OK")
@@ -308,6 +321,7 @@ class StkWindow(Adw.ApplicationWindow):
 
         def on_row_activated(listbox, row):
             listbox.select_row(row)
+            status_page.set_description(items[row.get_index()][0])
 
         def on_ok_clicked(button):
             selected_row = listbox.get_selected_row()
