@@ -27,10 +27,19 @@ class StkWindow(Adw.ApplicationWindow):
         self.main_menu_title = Adw.StatusPage()
         self.main_box.append(self.main_menu_title)
 
+        self.scrolled_window = Gtk.ScrolledWindow()
+        self.scrolled_window.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        self.scrolled_window.set_min_content_height(400)
+        self.scrolled_window.set_vexpand(True)
+        self.main_box.append(self.scrolled_window)
+
+        self.list_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        self.scrolled_window.set_child(self.list_box)
+
         self.listbox = Gtk.ListBox()
         self.listbox.set_selection_mode(Gtk.SelectionMode.SINGLE)
         self.listbox.add_css_class("boxed-list")
-        self.main_box.append(self.listbox)
+        self.list_box.append(self.listbox)
 
         button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         button_box.set_margin_top(12)
@@ -146,6 +155,15 @@ class StkWindow(Adw.ApplicationWindow):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         page.set_child(box)
 
+        scrolled_window = Gtk.ScrolledWindow()
+        scrolled_window.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scrolled_window.set_min_content_height(400)
+
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        scrolled_window.set_child(box)
+
+        page.set_child(scrolled_window)
+
         listbox = Gtk.ListBox()
         listbox.set_selection_mode(Gtk.SelectionMode.SINGLE)
         listbox.add_css_class("boxed-list")
@@ -161,6 +179,7 @@ class StkWindow(Adw.ApplicationWindow):
         button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         button_box.set_halign(Gtk.Align.CENTER)
         button_box.set_margin_top(12)
+        button_box.set_margin_bottom(12)
         box.append(button_box)
 
         ok_button = Gtk.Button(label="OK")
