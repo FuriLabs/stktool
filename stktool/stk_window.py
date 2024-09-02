@@ -24,7 +24,7 @@ class StkWindow(Adw.ApplicationWindow):
         self.navigation_view = Adw.NavigationView()
         self.toast_overlay.set_child(self.navigation_view)
 
-        self.main_page = Adw.NavigationPage(title="SIM Toolkit")
+        self.main_page = self.create_non_swipeable_page("SIM Toolkit")
         self.main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         self.main_page.set_child(self.main_box)
 
@@ -169,6 +169,11 @@ class StkWindow(Adw.ApplicationWindow):
         self.register_agent()
         self.navigation_view.pop_to_page(self.main_page)
 
+    def create_non_swipeable_page(self, title):
+        page = Adw.NavigationPage(title=title)
+        page.set_can_pop(False)
+        return page
+
     def show_display_text_popup(self, title, reply_func, error_func):
         dialog = Adw.MessageDialog.new(self)
         dialog.set_heading(title)
@@ -189,7 +194,7 @@ class StkWindow(Adw.ApplicationWindow):
         dialog.present()
 
     def show_input_page(self, title, default, reply_func, error_func, digits_only=False):
-        page = Adw.NavigationPage(title=title)
+        page = self.create_non_swipeable_page(title)
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         page.set_child(box)
 
@@ -238,7 +243,7 @@ class StkWindow(Adw.ApplicationWindow):
         self.navigation_view.push(page)
 
     def show_selection_page(self, title, items, default, reply_callback, error_callback):
-        page = Adw.NavigationPage(title=title)
+        page = self.create_non_swipeable_page(title)
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         page.set_child(box)
 
@@ -302,7 +307,7 @@ class StkWindow(Adw.ApplicationWindow):
         self.navigation_view.push(page)
 
     def show_key_page(self, title, reply_func, error_func, digits_only=False):
-        page = Adw.NavigationPage(title=title)
+        page = self.create_non_swipeable_page(title)
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         page.set_child(box)
 
@@ -428,7 +433,7 @@ class StkWindow(Adw.ApplicationWindow):
         dialog.present()
 
     def show_action_page(self, text):
-        page = Adw.NavigationPage(title="Action")
+        page = self.create_non_swipeable_page("Action")
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         page.set_child(box)
 
@@ -453,7 +458,7 @@ class StkWindow(Adw.ApplicationWindow):
         self.navigation_view.push(page)
 
     def show_confirm_open_channel_page(self, info):
-        page = Adw.NavigationPage(title="Confirm Open Channel")
+        page = self.create_non_swipeable_page("Confirm Open Channel")
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         page.set_child(box)
 
