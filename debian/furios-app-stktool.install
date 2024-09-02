@@ -1,0 +1,4 @@
+stktool /usr/lib/stktool
+main.py /usr/lib/stktool
+data/io.FuriOS.StkTool.desktop /usr/share/applications
+data/io.FuriOS.StkTool.svg /usr/share/icons/hicolor/scalable/apps

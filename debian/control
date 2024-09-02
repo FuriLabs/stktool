@@ -1,0 +1,17 @@
+Source: furios-app-stktool
+Maintainer: Bardia Moshiri <bardia@furilabs.com>
+Section: misc
+Priority: optional
+Build-Depends: debhelper-compat (= 13),
+               dh-python,
+               python3
+Standards-Version: 4.5.6
+Vcs-Browser: https://github.com/furilabs/stktool
+Vcs-Git: https://github.com/furilabs/stktool.git
+
+Package: furios-app-stktool
+Architecture: all
+Pre-Depends: ${misc:Pre-Depends}
+Depends: ${misc:Depends},
+         ${python3:Depends},
+Description: SIM-Handset Interface & Terminal (SHIT) for FuriOS
