@@ -166,67 +166,6 @@ class StkWindow(Adw.ApplicationWindow):
         self.register_agent()
         self.navigation_view.pop_to_page(self.main_page)
 
-    def show_selection_page(self, title, items, default, reply_callback, error_callback):
-        page = Adw.NavigationPage(title=title)
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        page.set_child(box)
-
-        scrolled_window = Gtk.ScrolledWindow()
-        scrolled_window.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-        scrolled_window.set_min_content_height(400)
-
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        scrolled_window.set_child(box)
-
-        page.set_child(scrolled_window)
-
-        listbox = Gtk.ListBox()
-        listbox.set_selection_mode(Gtk.SelectionMode.SINGLE)
-        listbox.add_css_class("boxed-list")
-        box.append(listbox)
-
-        for i, item in enumerate(items):
-            row = Adw.ActionRow(title=item[0])
-            listbox.append(row)
-
-        if 0 <= default < len(items):
-            listbox.select_row(listbox.get_row_at_index(default))
-
-        button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        button_box.set_halign(Gtk.Align.CENTER)
-        button_box.set_margin_top(12)
-        button_box.set_margin_bottom(12)
-        box.append(button_box)
-
-        ok_button = Gtk.Button(label="OK")
-        cancel_button = Gtk.Button(label="Cancel")
-        button_box.append(ok_button)
-        button_box.append(cancel_button)
-
-        def on_row_activated(listbox, row):
-            listbox.select_row(row)
-
-        def on_ok_clicked(button):
-            selected_row = listbox.get_selected_row()
-            if selected_row:
-                selection = selected_row.get_index()
-                self.navigation_view.pop()
-                GLib.idle_add(reply_callback, dbus.Byte(selection))
-            else:
-                self.show_toast("Please select an option")
-
-        def on_cancel_clicked(button):
-            self.navigation_view.pop()
-            GLib.idle_add(reply_callback, dbus.Byte(255))
-            self.unregister_agent()
-            self.register_agent()
-
-        listbox.connect("row-activated", on_row_activated)
-        ok_button.connect("clicked", on_ok_clicked)
-        cancel_button.connect("clicked", on_cancel_clicked)
-
-        self.navigation_view.push(page)
-
     def show_display_text_popup(self, title, reply_func, error_func):
         dialog = Adw.MessageDialog.new(self)
         dialog.set_heading(title)
