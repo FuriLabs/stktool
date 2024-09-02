@@ -91,15 +91,29 @@ class StkWindow(Adw.ApplicationWindow):
     def update_ui(self):
         if "MainMenuTitle" in self.properties:
             self.main_menu_title.set_title(self.properties["MainMenuTitle"])
-        if "MainMenu" in self.properties:
-            while (row := self.listbox.get_row_at_index(0)) is not None:
-                self.listbox.remove(row)
+
+        while (row := self.listbox.get_row_at_index(0)) is not None:
+            self.listbox.remove(row)
+
+        if "MainMenu" in self.properties and self.properties["MainMenu"]:
+            self.scrolled_window.set_child(self.list_box)
             for index, item in enumerate(self.properties["MainMenu"]):
                 row = Adw.ActionRow(title=item[0])
                 self.listbox.append(row)
 
-        if self.listbox.get_row_at_index(0):
-            self.listbox.select_row(self.listbox.get_row_at_index(0))
+            self.ok_button.set_sensitive(True)
+            self.cancel_button.set_sensitive(True)
+            if self.listbox.get_row_at_index(0):
+                self.listbox.select_row(self.listbox.get_row_at_index(0))
+        else:
+            status_page = Adw.StatusPage()
+            status_page.set_icon_name("dialog-warning-symbolic")
+            status_page.set_title("SIM Toolkit Unavailable")
+            status_page.set_description("SIM Toolkit is not available right now")
+            self.scrolled_window.set_child(status_page)
+
+            self.ok_button.set_sensitive(False)
+            self.cancel_button.set_sensitive(False)
 
     def property_changed(self, name, value):
         # print(f"property changed: name: {name}, value: {value}")
