@@ -11,6 +11,7 @@ from stktool.ofono_stk_agent import StkAgent, GoBack, EndSession, Busy
 class StkWindow(Adw.ApplicationWindow):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.connect("close-request", lambda _: exit(0))
         self.set_title("SIM Toolkit")
         self.set_default_size(400, 600)
 
@@ -552,6 +553,3 @@ class StkWindow(Adw.ApplicationWindow):
     def pop_to_main_page(self):
         while self.navigation_view.get_visible_page() != self.main_page:
             self.navigation_view.pop()
-
-    def quit(self):
-        self.get_application().quit()
