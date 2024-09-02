@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0
+# Copyright (C) 2024 Bardia Moshiri <bardia@furilabs.com>
 
 import gi
 from gi.repository import GLib, Gio

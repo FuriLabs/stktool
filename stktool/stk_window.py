@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: GPL-2.0
+# Copyright (C) 2024 Bardia Moshiri <bardia@furilabs.com>
+
 import gi
 gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
