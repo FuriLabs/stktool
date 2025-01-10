@@ -79,16 +79,19 @@ class StkWindow(Adw.ApplicationWindow):
             if "org.ofono.VoiceCallManager" in properties["Interfaces"]:
                 self.vcm = dbus.Interface(self.bus.get_object('org.ofono', path), 'org.ofono.VoiceCallManager')
 
-        self.stk.connect_to_signal("PropertyChanged", self.property_changed)
-        self.properties = self.stk.GetProperties()
+        if self.stk:
+            self.stk.connect_to_signal("PropertyChanged", self.property_changed)
+            self.properties = self.stk.GetProperties()
+            self.agent = StkAgent(self.bus, self.agent_path, self)
+            self.register_agent()
+        else:
+            self.properties = []
 
-        self.agent = StkAgent(self.bus, self.agent_path, self)
-        self.register_agent()
-
-        try:
-            self.vcm.connect_to_signal("CallAdded", self.agent.call_added)
-        except:
-            print("Failed to connect to signal CallAdded") # i... don't know?
+        if self.vcm:
+            try:
+                self.vcm.connect_to_signal("CallAdded", self.agent.call_added)
+            except:
+                print("Failed to connect to signal CallAdded") # i... don't know?
 
         self.update_ui()
 
