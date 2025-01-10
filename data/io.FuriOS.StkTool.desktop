@@ -1,6 +1,6 @@
 [Desktop Entry]
 Type=Application
-Name=Branchy
+Name=StkTool
 Exec=io.FuriOS.StkTool
 Icon=io.FuriOS.StkTool
 Terminal=false
