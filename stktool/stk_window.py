@@ -9,6 +9,8 @@ from gi.repository import Gtk, Adw, GLib, Pango
 import dbus
 import dbus.mainloop.glib
 
+import re
+
 from stktool.ofono_stk_agent import StkAgent, GoBack, EndSession, Busy
 
 class StkWindow(Adw.ApplicationWindow):
@@ -266,7 +268,8 @@ class StkWindow(Adw.ApplicationWindow):
         scrolled_window.set_child(listbox)
 
         for i, item in enumerate(items):
-            row = Adw.ActionRow(title=item[0])
+            title = re.sub(r'[^A-Za-z0-9 ]+', '', item[0]).strip()
+            row = Adw.ActionRow(title=title)
             listbox.append(row)
 
         if 0 <= default < len(items):
