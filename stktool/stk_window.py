@@ -1,17 +1,16 @@
 # SPDX-License-Identifier: GPL-2.0
-# Copyright (C) 2024 Bardia Moshiri <bardia@furilabs.com>
+# Copyright (C) 2025 Bardia Moshiri <bardia@furilabs.com>
 
 import gi
 gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
-from gi.repository import Gtk, Adw, GLib, Pango
+from gi.repository import Gtk, Adw, GLib
 
 import dbus
 import dbus.mainloop.glib
 
-import re
-
 from stktool.ofono_stk_agent import StkAgent, GoBack, EndSession, Busy
+from stktool import ui
 
 class StkWindow(Adw.ApplicationWindow):
     def __init__(self, *args, **kwargs):
@@ -20,46 +19,23 @@ class StkWindow(Adw.ApplicationWindow):
         self.set_title("SIM Toolkit")
         self.set_default_size(400, 600)
 
-        self.toast_overlay = Adw.ToastOverlay()
+        # Create main layout
+        self.toast_overlay, self.navigation_view = ui.create_main_window_layout()
         self.set_content(self.toast_overlay)
 
-        self.navigation_view = Adw.NavigationView()
-        self.toast_overlay.set_child(self.navigation_view)
+        # Create main page
+        self.main_page = ui.create_non_swipeable_page("SIM Toolkit")
 
-        self.main_page = self.create_non_swipeable_page("SIM Toolkit")
-        self.main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        # Create main page content
+        (self.main_box, self.main_menu_title, self.scrolled_window,
+         self.list_box, self.listbox, button_box,
+         self.ok_button, self.cancel_button) = ui.create_main_page_content()
+
         self.main_page.set_child(self.main_box)
 
-        self.main_menu_title = Adw.StatusPage()
-        self.main_box.append(self.main_menu_title)
-
-        self.scrolled_window = Gtk.ScrolledWindow()
-        self.scrolled_window.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-        self.scrolled_window.set_min_content_height(400)
-        self.scrolled_window.set_vexpand(True)
-        self.main_box.append(self.scrolled_window)
-
-        self.list_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        self.scrolled_window.set_child(self.list_box)
-
-        self.listbox = Gtk.ListBox()
-        self.listbox.set_selection_mode(Gtk.SelectionMode.SINGLE)
-        self.listbox.add_css_class("boxed-list")
-        self.list_box.append(self.listbox)
-
-        button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        button_box.set_margin_top(12)
-        button_box.set_margin_bottom(24)
-        button_box.set_halign(Gtk.Align.CENTER)
-        self.main_box.append(button_box)
-
-        self.ok_button = Gtk.Button(label="OK")
+        # Connect button events
         self.ok_button.connect("clicked", self.on_ok_clicked)
-        button_box.append(self.ok_button)
-
-        self.cancel_button = Gtk.Button(label="Cancel")
         self.cancel_button.connect("clicked", self.on_cancel_clicked)
-        button_box.append(self.cancel_button)
 
         self.navigation_view.add(self.main_page)
 
@@ -93,7 +69,7 @@ class StkWindow(Adw.ApplicationWindow):
             try:
                 self.vcm.connect_to_signal("CallAdded", self.agent.call_added)
             except:
-                print("Failed to connect to signal CallAdded") # i... don't know?
+                print("Failed to connect to signal CallAdded")
 
         self.update_ui()
 
@@ -107,7 +83,7 @@ class StkWindow(Adw.ApplicationWindow):
         if "MainMenu" in self.properties and self.properties["MainMenu"]:
             self.scrolled_window.set_child(self.list_box)
             for index, item in enumerate(self.properties["MainMenu"]):
-                row = Adw.ActionRow(title=item[0])
+                row = ui.setup_main_listbox_item(item[0])
                 self.listbox.append(row)
 
             self.ok_button.set_sensitive(True)
@@ -115,123 +91,65 @@ class StkWindow(Adw.ApplicationWindow):
             if self.listbox.get_row_at_index(0):
                 self.listbox.select_row(self.listbox.get_row_at_index(0))
         else:
-            status_page = Adw.StatusPage()
-            status_page.set_icon_name("dialog-warning-symbolic")
-            status_page.set_title("SIM Toolkit Unavailable")
-            status_page.set_description("SIM Toolkit is not available right now")
+            status_page = ui.create_unavailable_status_page()
             self.scrolled_window.set_child(status_page)
-
             self.ok_button.set_sensitive(False)
             self.cancel_button.set_sensitive(False)
 
     def property_changed(self, name, value):
-        # print(f"property changed: name: {name}, value: {value}")
         self.properties[name] = value
         GLib.idle_add(self.update_ui)
 
     def on_ok_clicked(self, button):
         selected_row = self.listbox.get_selected_row()
         if selected_row:
-            # print(f"Selected item index: {selected_row.get_index()}")
             try:
                 self.stk.SelectItem(selected_row.get_index(), "/appagent")
             except dbus.exceptions.DBusException as e:
-                self.show_toast("Operation in progress. Please wait.")
+                ui.create_toast(self.toast_overlay, "Operation in progress. Please wait.")
                 print(f"on_ok_clicked: dbus exception: {e}")
             except Exception as e:
-                self.show_toast("{e}")
-                printf(f"on_ok_clicked: general exception: {e}")
+                ui.create_toast(self.toast_overlay, f"{e}")
+                print(f"on_ok_clicked: general exception: {e}")
         else:
-            self.show_toast("Please select an item first.")
-
-    def show_toast(self, message, duration=3):
-        toast = Adw.Toast(title=message)
-        self.toast_overlay.add_toast(toast)
-
-        def dismiss_toast():
-            toast.dismiss()
-            return False
-
-        GLib.timeout_add_seconds(duration, dismiss_toast)
+            ui.create_toast(self.toast_overlay, "Please select an item first.")
 
     def register_agent(self):
         try:
             self.stk.RegisterAgent(self.agent_path)
         except dbus.exceptions.DBusException as e:
-            self.show_toast(f"Failed to register agent: {str(e)}")
+            ui.create_toast(self.toast_overlay, f"Failed to register agent: {str(e)}")
             print(f"Failed to register agent: {str(e)}")
 
     def unregister_agent(self):
         try:
             self.stk.UnregisterAgent(self.agent_path)
         except dbus.exceptions.DBusException as e:
-            self.show_toast(f"Failed to unregister agent: {str(e)}")
+            ui.create_toast(self.toast_overlay, f"Failed to unregister agent: {str(e)}")
             print(f"Failed to unregister agent: {str(e)}")
 
-    # this is cancel in the main menu
     def on_cancel_clicked(self, button):
         self.unregister_agent()
         self.register_agent()
         self.navigation_view.pop_to_page(self.main_page)
 
-    def create_non_swipeable_page(self, title):
-        page = Adw.NavigationPage(title=title)
-        page.set_can_pop(False)
-        return page
-
     def show_display_text_popup(self, title, reply_func, error_func):
-        dialog = Adw.MessageDialog.new(self)
-        dialog.set_heading(title)
-
-        dialog.add_response("no", ("No"))
-
-        dialog.add_response("yes", ("Yes"))
-        dialog.set_default_response("no")
-        dialog.set_close_response("no")
-
         def on_response(dialog, response):
             if response == "yes":
                 GLib.idle_add(reply_func, True)
             else:
                 GLib.idle_add(reply_func, False)
 
-        dialog.connect("response", on_response)
+        dialog = ui.create_display_text_dialog(self, title, on_response)
         dialog.present()
 
     def show_input_page(self, title, default, reply_func, error_func, digits_only=False):
-        page = self.create_non_swipeable_page(title)
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        page = ui.create_non_swipeable_page(title)
+
+        (box, title_label, clamp, entry, button_box,
+         ok_button, cancel_button) = ui.create_input_page_content(title, default, digits_only)
+
         page.set_child(box)
-
-        title_label = Gtk.Label(label=title)
-        title_label.set_wrap(True)
-        title_label.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
-        title_label.set_max_width_chars(30)
-        title_label.add_css_class("title-4")
-        title_label.set_margin_top(12)
-        title_label.set_margin_bottom(12)
-        title_label.set_margin_start(12)
-        title_label.set_margin_end(12)
-
-        clamp = Adw.Clamp()
-        clamp.set_child(title_label)
-        box.append(clamp)
-
-        entry = Adw.EntryRow(title="Input")
-        entry.set_text(default)
-
-        if digits_only:
-            entry.set_input_purpose(Gtk.InputPurpose.DIGITS)
-        box.append(entry)
-
-        button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        button_box.set_halign(Gtk.Align.END)
-        box.append(button_box)
-
-        ok_button = Gtk.Button(label="OK")
-        cancel_button = Gtk.Button(label="Cancel")
-        button_box.append(ok_button)
-        button_box.append(cancel_button)
 
         def on_ok_clicked(button):
             user_input = entry.get_text()
@@ -248,44 +166,16 @@ class StkWindow(Adw.ApplicationWindow):
         self.navigation_view.push(page)
 
     def show_selection_page(self, title, items, default, reply_callback, error_callback):
-        page = self.create_non_swipeable_page(title)
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        page = ui.create_non_swipeable_page(title)
+
+        (box, status_page, scrolled_window, listbox, button_box,
+         ok_button, cancel_button) = ui.create_selection_page_content(title, items)
+
         page.set_child(box)
-
-        status_page = Adw.StatusPage()
-        status_page.set_title(title)
-        box.append(status_page)
-
-        scrolled_window = Gtk.ScrolledWindow()
-        scrolled_window.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-        scrolled_window.set_min_content_height(400)
-        scrolled_window.set_vexpand(True)
-        box.append(scrolled_window)
-
-        listbox = Gtk.ListBox()
-        listbox.set_selection_mode(Gtk.SelectionMode.SINGLE)
-        listbox.add_css_class("boxed-list")
-        scrolled_window.set_child(listbox)
-
-        for i, item in enumerate(items):
-            title = re.sub(r'[^A-Za-z0-9 ]+', '', item[0]).strip()
-            row = Adw.ActionRow(title=title)
-            listbox.append(row)
 
         if 0 <= default < len(items):
             listbox.select_row(listbox.get_row_at_index(default))
             status_page.set_description(items[default][0])
-
-        button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        button_box.set_halign(Gtk.Align.CENTER)
-        button_box.set_margin_top(12)
-        button_box.set_margin_bottom(24)
-        box.append(button_box)
-
-        ok_button = Gtk.Button(label="OK")
-        cancel_button = Gtk.Button(label="Cancel")
-        button_box.append(ok_button)
-        button_box.append(cancel_button)
 
         def on_row_activated(listbox, row):
             listbox.select_row(row)
@@ -298,7 +188,7 @@ class StkWindow(Adw.ApplicationWindow):
                 self.navigation_view.pop()
                 GLib.idle_add(reply_callback, dbus.Byte(selection))
             else:
-                self.show_toast("Please select an option")
+                ui.create_toast(self.toast_overlay, "Please select an option")
 
         def on_cancel_clicked(button):
             self.navigation_view.pop()
@@ -313,37 +203,12 @@ class StkWindow(Adw.ApplicationWindow):
         self.navigation_view.push(page)
 
     def show_key_page(self, title, reply_func, error_func, digits_only=False):
-        page = self.create_non_swipeable_page(title)
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        page = ui.create_non_swipeable_page(title)
+
+        (box, title_label, clamp, entry, button_box,
+         ok_button, back_button) = ui.create_key_page_content(title, digits_only)
+
         page.set_child(box)
-
-        title_label = Gtk.Label(label=title)
-        title_label.set_wrap(True)
-        title_label.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
-        title_label.set_max_width_chars(30)
-        title_label.add_css_class("title-4")
-        title_label.set_margin_top(12)
-        title_label.set_margin_bottom(12)
-        title_label.set_margin_start(12)
-        title_label.set_margin_end(12)
-
-        clamp = Adw.Clamp()
-        clamp.set_child(title_label)
-        box.append(clamp)
-
-        entry = Adw.EntryRow(title="Key")
-        if digits_only:
-            entry.set_input_purpose(Gtk.InputPurpose.DIGITS)
-        box.append(entry)
-
-        button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        button_box.set_halign(Gtk.Align.END)
-        box.append(button_box)
-
-        ok_button = Gtk.Button(label="OK")
-        back_button = Gtk.Button(label="Back")
-        button_box.append(ok_button)
-        button_box.append(back_button)
 
         def on_ok_clicked(button):
             key = entry.get_text()
@@ -360,128 +225,55 @@ class StkWindow(Adw.ApplicationWindow):
         self.navigation_view.push(page)
 
     def show_confirmation_popup(self, title, reply_func, error_func, info=None, url=None):
-        dialog = Adw.MessageDialog.new(self)
-        dialog.set_heading(title)
-
-        body_text = ""
-        if info:
-            body_text += info
-        if url:
-            if body_text:
-                body_text += "\n\n"
-            body_text += f"URL: {url}"
-
-        if body_text:
-            dialog.set_body(body_text)
-
-        dialog.add_response("no", ("No"))
-
-        dialog.add_response("yes", ("Yes"))
-        dialog.set_default_response("no")
-        dialog.set_close_response("no")
-
         def on_response(dialog, response):
             if response == "yes":
                 GLib.idle_add(reply_func, True)
             else:
                 GLib.idle_add(reply_func, False)
 
-        dialog.connect("response", on_response)
+        dialog = ui.create_confirmation_dialog(self, title, info, url, on_response)
         dialog.present()
 
     def show_tone_page(self, tone, text):
-        dialog = Adw.MessageDialog.new(self)
-        dialog.set_heading(text)
-
-        if tone:
-            dialog.set_body(tone)
-
-        dialog.add_response("end", ("End Tone"))
-        dialog.set_default_response("end")
-        dialog.set_close_response("end")
-
         def on_response(dialog, response):
             pass
 
-        dialog.connect("response", on_response)
+        dialog = ui.create_tone_dialog(self, text, tone, on_response)
         dialog.present()
 
     def show_loop_tone_page(self, tone, text, reply_func, error_func):
-        dialog = Adw.MessageDialog.new(self)
-        dialog.set_heading(text)
-
-        if tone:
-            dialog.set_body(tone)
-
-        dialog.add_response("wait", ("Wait"))
-
-        dialog.add_response("end", ("End Tone"))
-        dialog.set_default_response("end")
-        dialog.set_close_response("end")
-
         def on_response(dialog, response):
             if response == "wait":
                 GLib.idle_add(reply_func, True)
             else:
                 GLib.idle_add(reply_func, False)
 
-        dialog.connect("response", on_response)
+        dialog = ui.create_loop_tone_dialog(self, text, tone, on_response)
         dialog.present()
 
     def show_action_info_popup(self, text):
-        dialog = Adw.MessageDialog.new(self)
-        dialog.set_heading(text)
-
-        dialog.add_response("ok", ("OK"))
-        dialog.set_default_response("ok")
-        dialog.set_close_response("ok")
-
+        dialog = ui.create_action_info_dialog(self, text)
         dialog.present()
 
     def show_action_page(self, text):
-        page = self.create_non_swipeable_page("Action")
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        page = ui.create_non_swipeable_page("Action")
+
+        (box, status_page, button_box, ok_button) = ui.create_action_page_content(text)
+
         page.set_child(box)
-
-        status_page = Adw.StatusPage(
-            title="Action",
-            description=f"Text: {text}"
-        )
-        box.append(status_page)
-
-        button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        button_box.set_halign(Gtk.Align.END)
-        box.append(button_box)
-
-        ok_button = Gtk.Button(label="OK")
-        button_box.append(ok_button)
 
         def on_ok_clicked(button):
             self.navigation_view.pop()
 
         ok_button.connect("clicked", on_ok_clicked)
-
         self.navigation_view.push(page)
 
     def show_confirm_open_channel_page(self, info):
-        page = self.create_non_swipeable_page("Confirm Open Channel")
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        page = ui.create_non_swipeable_page("Confirm Open Channel")
+
+        (box, status_page, button_box, yes_button, no_button) = ui.create_confirm_open_channel_page_content(info)
+
         page.set_child(box)
-
-        status_page = Adw.StatusPage(
-            title="Confirm Open Channel",
-            description=f"Information: {info}"
-        )
-        box.append(status_page)
-
-        button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        button_box.set_halign(Gtk.Align.END)
-        box.append(button_box)
-
-        yes_button = Gtk.Button(label="Yes")
-        no_button = Gtk.Button(label="No")
-        button_box.append(yes_button)
-        button_box.append(no_button)
 
         result = [False]
 
