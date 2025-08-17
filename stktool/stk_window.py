@@ -10,7 +10,7 @@ import dbus
 import dbus.mainloop.glib
 
 from stktool.ofono_stk_agent import StkAgent, GoBack, Busy
-from stktool.utils import print_property_changed
+from stktool.utils import print_property_changed, parse_stk_text
 from stktool import ui
 
 class StkWindow(Adw.ApplicationWindow):
@@ -150,7 +150,18 @@ class StkWindow(Adw.ApplicationWindow):
 
     def update_ui(self):
         if "MainMenuTitle" in self.properties:
-            self.main_menu_title.set_title(self.properties["MainMenuTitle"])
+            title_text = self.properties["MainMenuTitle"]
+            parsed_title = parse_stk_text(title_text)
+
+            if parsed_title.get('segments'):
+                title_label = create_formatted_label(title_text, ["title-1"])
+                title_label.set_halign(Gtk.Align.CENTER)
+                title_label.set_valign(Gtk.Align.CENTER)
+
+                self.main_menu_title.set_child(title_label)
+            else:
+                self.main_menu_title.set_child(None)
+                self.main_menu_title.set_title(parsed_title.get('text', title_text))
 
         while (row := self.listbox.get_row_at_index(0)) is not None:
             self.listbox.remove(row)
@@ -247,20 +258,37 @@ class StkWindow(Adw.ApplicationWindow):
             else:
                 GLib.idle_add(reply_func, False)
 
-        dialog = ui.create_confirmation_dialog("Display Text", title, response_callback=on_response)
+        parsed_title = parse_stk_text(title)
+        dialog_title = parsed_title.get('text', title)
+
+        dialog = ui.create_confirmation_dialog("Display Text", dialog_title, response_callback=on_response)
         dialog.present(self)
 
     def show_input_page(self, title, default, min_chars, reply_func, error_func, digits_only=False):
-        page = ui.create_non_swipeable_page(title)
+        parsed_title = parse_stk_text(title)
+        page_title = parsed_title.get('text', title)
+
+        page = ui.create_non_swipeable_page(page_title)
 
         (box, header, entry, button_box,
          ok_button, cancel_button, validation_label) = ui.create_input_page_content(
             title, default, digits_only)
 
         page.set_child(box)
+        print(f"min chars is {min_chars}")
+        try:
+            min_chars_int = int(min_chars) if min_chars is not None else 0
+        except (ValueError, TypeError):
+            print("failed to convert min chars")
+            min_chars_int = 0
 
         def on_ok_clicked(button):
             user_input = entry.get_text()
+
+            if min_chars > 0 and len(user_input) < min_chars:
+                ui.create_toast(self.toast_overlay, f"Input must be at least {min_chars} characters")
+                return
+
             self.navigation_view.pop()
             GLib.idle_add(reply_func, user_input)
 
@@ -274,7 +302,10 @@ class StkWindow(Adw.ApplicationWindow):
         self.navigation_view.push(page)
 
     def show_selection_page(self, title, items, default, reply_callback, error_callback):
-        page = ui.create_non_swipeable_page(title)
+        parsed_title = parse_stk_text(title)
+        page_title = parsed_title.get('text', title)
+
+        page = ui.create_non_swipeable_page(page_title)
 
         (box, header, scrolled_window, listbox, button_box,
          ok_button, cancel_button) = ui.create_selection_page_content(title, items)
@@ -283,11 +314,15 @@ class StkWindow(Adw.ApplicationWindow):
 
         if 0 <= default < len(items):
             listbox.select_row(listbox.get_row_at_index(default))
-            header.set_description(items[default][0])
+            item_text = items[default][0]
+            parsed_item = parse_stk_text(item_text)
+            header.set_description(parsed_item.get('text', item_text))
 
         def on_row_activated(listbox, row):
             listbox.select_row(row)
-            header.set_description(items[row.get_index()][0])
+            item_text = items[row.get_index()][0]
+            parsed_item = parse_stk_text(item_text)
+            header.set_description(parsed_item.get('text', item_text))
 
         def on_ok_clicked(button):
             selected_row = listbox.get_selected_row()
@@ -314,7 +349,10 @@ class StkWindow(Adw.ApplicationWindow):
         self.navigation_view.push(page)
 
     def show_key_page(self, title, reply_func, error_func, digits_only=False):
-        page = ui.create_non_swipeable_page(title)
+        parsed_title = parse_stk_text(title)
+        page_title = parsed_title.get('text', title)
+
+        page = ui.create_non_swipeable_page(page_title)
 
         (box, title_label, clamp, entry, button_box,
          ok_button, back_button) = ui.create_key_page_content(title, digits_only)
@@ -358,7 +396,15 @@ class StkWindow(Adw.ApplicationWindow):
             else:
                 GLib.idle_add(reply_func, False)
 
-        dialog = ui.create_confirmation_dialog(title, info, url, on_response)
+        parsed_title = parse_stk_text(title)
+        dialog_title = parsed_title.get('text', title)
+
+        parsed_info = None
+        if info:
+            parsed_info = parse_stk_text(info)
+            info = parsed_info.get('text', info)
+
+        dialog = ui.create_confirmation_dialog(dialog_title, info, url, on_response)
         dialog.present(self)
 
     def show_tone_page(self, tone, text):
@@ -366,7 +412,10 @@ class StkWindow(Adw.ApplicationWindow):
             # TODO: do something
             pass
 
-        dialog = ui.create_tone_dialog(text, tone, on_response)
+        parsed_text = parse_stk_text(text)
+        dialog_text = parsed_text.get('text', text)
+
+        dialog = ui.create_tone_dialog(dialog_text, tone, on_response)
         dialog.present(self)
 
     def show_loop_tone_page(self, tone, text, reply_func, error_func):
@@ -376,11 +425,17 @@ class StkWindow(Adw.ApplicationWindow):
             else:
                 GLib.idle_add(reply_func, False)
 
-        dialog = ui.create_loop_tone_dialog(text, tone, on_response)
+        parsed_text = parse_stk_text(text)
+        dialog_text = parsed_text.get('text', text)
+
+        dialog = ui.create_loop_tone_dialog(dialog_text, tone, on_response)
         dialog.present(self)
 
     def show_action_info_popup(self, text):
-        dialog = ui.create_action_info_dialog(text)
+        parsed_text = parse_stk_text(text)
+        dialog_text = parsed_text.get('text', text)
+
+        dialog = ui.create_action_info_dialog(dialog_text)
         dialog.present(self)
 
     def show_action_page(self, text):

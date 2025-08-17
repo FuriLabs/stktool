@@ -9,6 +9,8 @@ gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
 from gi.repository import Gtk, Adw
 
+from stktool.utils import parse_stk_text, apply_stk_formatting, create_formatted_label
+
 def create_main_window_layout() -> tuple[Adw.ToastOverlay, Adw.NavigationView]:
     """Create the main window layout structure."""
     toast_overlay = Adw.ToastOverlay()
@@ -18,7 +20,11 @@ def create_main_window_layout() -> tuple[Adw.ToastOverlay, Adw.NavigationView]:
 
 def create_non_swipeable_page(title: str) -> Adw.NavigationPage:
     """Create a non-swipeable navigation page."""
-    page = Adw.NavigationPage(title=title)
+    # Parse title for formatting
+    parsed_title = parse_stk_text(title)
+    plain_title = parsed_title.get('text', title)
+
+    page = Adw.NavigationPage(title=plain_title)
     page.set_can_pop(False)
     return page
 
@@ -100,10 +106,23 @@ def create_input_page_content(title: str, default: str, digits_only: bool = Fals
     """Create input page content structure."""
     main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
 
+    parsed_title = parse_stk_text(title)
+
     # Header with icon and title
-    header = Adw.StatusPage()
-    header.set_title(title)
-    header.add_css_class("compact")
+    if parsed_title.get('segments'):
+        header = Adw.StatusPage()
+        header.add_css_class("compact")
+
+        title_label = create_formatted_label(title, ["title-1"])
+        title_label.set_halign(Gtk.Align.CENTER)
+        title_label.set_valign(Gtk.Align.CENTER)
+
+        header.set_child(title_label)
+    else:
+        header = Adw.StatusPage()
+        header.set_title(parsed_title.get('text', title))
+        header.add_css_class("compact")
+
     main_box.append(header)
 
     # Content area
@@ -174,9 +193,22 @@ def create_selection_page_content(title: str, items: list) -> tuple[Gtk.Box, Adw
     """Create selection page content structure."""
     main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
 
-    header = Adw.StatusPage()
-    header.set_title(title)
-    header.add_css_class("compact")
+    parsed_title = parse_stk_text(title)
+
+    if parsed_title.get('segments'):
+        header = Adw.StatusPage()
+        header.add_css_class("compact")
+
+        title_label = create_formatted_label(title, ["title-1"])
+        title_label.set_halign(Gtk.Align.CENTER)
+        title_label.set_valign(Gtk.Align.CENTER)
+
+        header.set_child(title_label)
+    else:
+        header = Adw.StatusPage()
+        header.set_title(parsed_title.get('text', title))
+        header.add_css_class("compact")
+
     main_box.append(header)
 
     content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
@@ -200,8 +232,29 @@ def create_selection_page_content(title: str, items: list) -> tuple[Gtk.Box, Adw
 
     # Populate listbox with items
     for item in items:
-        title_text = re.sub(r'[^A-Za-z0-9 ]+', '', item[0]).strip()
-        row = Adw.ActionRow(title=title_text)
+        item_text = item[0] if isinstance(item, (tuple, list)) else str(item)
+        parsed_item = parse_stk_text(item_text)
+
+        if parsed_item.get('segments'):
+            row = Gtk.ListBoxRow()
+            row.set_activatable(True)
+
+            item_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+            item_box.set_margin_top(12)
+            item_box.set_margin_bottom(12)
+            item_box.set_margin_start(12)
+            item_box.set_margin_end(12)
+
+            item_label = create_formatted_label(item_text)
+            item_label.set_halign(Gtk.Align.START)
+            item_label.set_valign(Gtk.Align.CENTER)
+            item_box.append(item_label)
+
+            row.set_child(item_box)
+        else:
+            clean_text = re.sub(r'[^A-Za-z0-9 ]+', '', parsed_item.get('text', item_text)).strip()
+            row = Adw.ActionRow(title=clean_text)
+
         listbox.append(row)
 
     button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
@@ -223,14 +276,28 @@ def create_selection_page_content(title: str, items: list) -> tuple[Gtk.Box, Adw
     return main_box, header, scrolled_window, listbox, button_box, ok_button, cancel_button
 
 def create_key_page_content(title: str, digits_only: bool = False) -> tuple[Gtk.Box, Adw.StatusPage, Adw.Clamp, Adw.EntryRow, Gtk.Box, Gtk.Button, Gtk.Button]:
-    """Create key input page content structure."""
+    """Create key input page content structure with text attribute support."""
     main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
 
+    parsed_title = parse_stk_text(title)
+
     # Header
-    header = Adw.StatusPage()
-    header.set_title(title)
-    header.set_description("Press any key" if not digits_only else "Press any digit")
-    header.add_css_class("compact")
+    if parsed_title.get('segments'):
+        header = Adw.StatusPage()
+        header.set_description("Press any key" if not digits_only else "Press any digit")
+        header.add_css_class("compact")
+
+        title_label = create_formatted_label(title, ["title-1"])
+        title_label.set_halign(Gtk.Align.CENTER)
+        title_label.set_valign(Gtk.Align.CENTER)
+
+        header.set_child(title_label)
+    else:
+        header = Adw.StatusPage()
+        header.set_title(parsed_title.get('text', title))
+        header.set_description("Press any key" if not digits_only else "Press any digit")
+        header.add_css_class("compact")
+
     main_box.append(header)
 
     # Content area
@@ -253,7 +320,7 @@ def create_key_page_content(title: str, digits_only: bool = False) -> tuple[Gtk.
     clamp.set_child(entry)
 
     button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-    button_box.set_halign(Gtk.Align.END)
+    button_box.set_halign(Gtk.Align.End)
     button_box.set_margin_top(12)
     content_box.append(button_box)
 
@@ -274,8 +341,12 @@ def create_window_controls(window):
     window.set_title("SIM Toolkit")
 
 def create_toast(toast_overlay: Adw.ToastOverlay, message: str, duration: int = 3):
+    print(message)
     """Create toast message."""
-    toast = Adw.Toast(title=message)
+    parsed_msg = parse_stk_text(message)
+    plain_message = parsed_msg.get('text', message)
+
+    toast = Adw.Toast(title=plain_message)
     toast.set_timeout(duration)
     toast_overlay.add_toast(toast)
     return toast
@@ -283,11 +354,14 @@ def create_toast(toast_overlay: Adw.ToastOverlay, message: str, duration: int = 
 def create_confirmation_dialog(title: str, info: str = None, url: str = None, response_callback: Callable = None) -> Adw.AlertDialog:
     """Create confirmation dialog."""
     dialog = Adw.AlertDialog()
-    dialog.set_heading(title)
+
+    parsed_title = parse_stk_text(title)
+    dialog.set_heading(parsed_title.get('text', title))
 
     body_text = ""
     if info:
-        body_text += info
+        parsed_info = parse_stk_text(info)
+        body_text += parsed_info.get('text', info)
     if url:
         if body_text:
             body_text += "\n\n"
@@ -310,9 +384,11 @@ def create_confirmation_dialog(title: str, info: str = None, url: str = None, re
     return dialog
 
 def create_tone_dialog(text: str, tone: str = None, response_callback: Callable = None) -> Adw.AlertDialog:
-    """Create tone dialog."""
+    """Create tone dialog with text attribute support."""
     dialog = Adw.AlertDialog()
-    dialog.set_heading(text)
+
+    parsed_text = parse_stk_text(text)
+    dialog.set_heading(parsed_text.get('text', text))
 
     if tone:
         dialog.set_body(f"Tone: {tone}")
@@ -329,7 +405,9 @@ def create_tone_dialog(text: str, tone: str = None, response_callback: Callable 
 def create_loop_tone_dialog(text: str, tone: str = None, response_callback: Callable = None) -> Adw.AlertDialog:
     """Create loop tone dialog."""
     dialog = Adw.AlertDialog()
-    dialog.set_heading(text)
+
+    parsed_text = parse_stk_text(text)
+    dialog.set_heading(parsed_text.get('text', text))
 
     if tone:
         dialog.set_body(f"Tone: {tone}")
@@ -349,7 +427,9 @@ def create_action_info_dialog(text: str) -> Adw.AlertDialog:
     """Create action info dialog."""
     dialog = Adw.AlertDialog()
     dialog.set_heading("Action Information")
-    dialog.set_body(text)
+
+    parsed_text = parse_stk_text(text)
+    dialog.set_body(parsed_text.get('text', text))
 
     dialog.add_response("ok", "OK")
     dialog.set_default_response("ok")
@@ -367,7 +447,9 @@ def create_action_page_content(text: str) -> tuple[Gtk.Box, Adw.StatusPage, Gtk.
 
     status_page = Adw.StatusPage()
     status_page.set_title("Action")
-    status_page.set_description(text)
+
+    parsed_text = parse_stk_text(text)
+    status_page.set_description(parsed_text.get('text', text))
     main_box.append(status_page)
 
     button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
@@ -382,7 +464,7 @@ def create_action_page_content(text: str) -> tuple[Gtk.Box, Adw.StatusPage, Gtk.
     return main_box, status_page, button_box, ok_button
 
 def create_confirm_open_channel_page_content(info: str) -> tuple[Gtk.Box, Adw.StatusPage, Gtk.Box, Gtk.Button, Gtk.Button]:
-    """Create confirm open channel page content structure."""
+    """Create confirm open channel page content structure"""
     main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
     main_box.set_margin_top(12)
     main_box.set_margin_bottom(12)
@@ -391,7 +473,9 @@ def create_confirm_open_channel_page_content(info: str) -> tuple[Gtk.Box, Adw.St
 
     status_page = Adw.StatusPage()
     status_page.set_title("Confirm Open Channel")
-    status_page.set_description(info)
+
+    parsed_info = parse_stk_text(info)
+    status_page.set_description(parsed_info.get('text', info))
     main_box.append(status_page)
 
     button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
@@ -411,8 +495,29 @@ def create_confirm_open_channel_page_content(info: str) -> tuple[Gtk.Box, Adw.St
 
     return main_box, status_page, button_box, yes_button, no_button
 
-def setup_main_listbox_item(item_text: str) -> Adw.ActionRow:
+def setup_main_listbox_item(item_text: str) -> Gtk.Widget:
     """Create main menu listbox item."""
-    row = Adw.ActionRow(title=item_text)
-    row.set_activatable(True)
-    return row
+    parsed_item = parse_stk_text(item_text)
+
+    if parsed_item.get('segments'):
+        row = Gtk.ListBoxRow()
+        row.set_activatable(True)
+
+        item_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        item_box.set_margin_top(12)
+        item_box.set_margin_bottom(12)
+        item_box.set_margin_start(12)
+        item_box.set_margin_end(12)
+
+        item_label = create_formatted_label(item_text)
+        item_label.set_halign(Gtk.Align.START)
+        item_label.set_valign(Gtk.Align.CENTER)
+        item_box.append(item_label)
+
+        row.set_child(item_box)
+        return row
+    else:
+        clean_text = parsed_item.get('text', item_text)
+        row = Adw.ActionRow(title=clean_text)
+        row.set_activatable(True)
+        return row
