@@ -30,7 +30,7 @@ def format_items_list(items):
         return "[]"
 
     formatted_items = []
-    for i, item in enumerate(items):
+    for item in items:
         if isinstance(item, (tuple, list)) and len(item) >= 1:
             title = item[0]
             formatted_items.append(f"   '{title}'")
@@ -48,17 +48,6 @@ def print_method_call(method_name, **kwargs):
         else:
             extracted_value = extract_dbus_data(value)
             print(f"  {key}: {extracted_value}")
-
-def format_dbus_properties(properties):
-    if not properties:
-        return "{}"
-
-    formatted_props = []
-    for key, value in properties.items():
-        extracted_value = extract_dbus_data(value)
-        formatted_props.append(f"  {key}: {extracted_value}")
-
-    return "{\n" + "\n".join(formatted_props) + "\n}"
 
 def print_property_changed(name, value):
     print(f"  name: {name}")

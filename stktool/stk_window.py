@@ -9,16 +9,18 @@ from gi.repository import Gtk, Adw, GLib
 import dbus
 import dbus.mainloop.glib
 
-from stktool.ofono_stk_agent import StkAgent, GoBack, EndSession, Busy
+from stktool.ofono_stk_agent import StkAgent, GoBack, Busy
 from stktool.utils import print_property_changed
 from stktool import ui
 
 class StkWindow(Adw.ApplicationWindow):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.connect("close-request", lambda _: exit(0))
+        self.connect("close-request", lambda _: self.cleanup_and_exit())
         self.set_title("SIM Toolkit")
         self.set_default_size(400, 600)
+
+        ui.create_window_controls(self)
 
         # Create main layout
         self.toast_overlay, self.navigation_view = ui.create_main_window_layout()
@@ -30,7 +32,7 @@ class StkWindow(Adw.ApplicationWindow):
         # Create main page content
         (self.main_box, self.main_menu_title, self.scrolled_window,
          self.list_box, self.listbox, button_box,
-         self.ok_button, self.cancel_button) = ui.create_main_page_content()
+         self.ok_button, self.cancel_button, self.status_banner) = ui.create_main_page_content()
 
         self.main_page.set_child(self.main_box)
 
@@ -44,36 +46,107 @@ class StkWindow(Adw.ApplicationWindow):
         self.agent = None
         self.stk = None
         self.vcm = None
+        self.connection_state = "disconnected"
 
-        self.setup_stk()
+        self.show_loading_state("Initializing SIM Toolkit...")
+
+        GLib.timeout_add(100, self.setup_stk)
+
+    def cleanup_and_exit(self):
+        try:
+            if self.agent and self.stk:
+                self.unregister_agent()
+        except Exception as e:
+            print(f"Error during cleanup: {e}")
+        exit(0)
+
+    def show_loading_state(self, message: str):
+        loading_page = ui.create_loading_status_page()
+        loading_page.set_description(message)
+        self.scrolled_window.set_child(loading_page)
+        self.ok_button.set_sensitive(False)
+        self.cancel_button.set_sensitive(False)
+
+    def update_connection_status(self, state: str, message: str = ""):
+        if state == "connected":
+            self.status_banner.set_title("Connected to SIM Toolkit")
+            self.status_banner.set_revealed(False)
+            self.connection_state = "connected"
+        elif state == "error":
+            self.status_banner.set_title(f"Connection Error: {message}")
+            self.status_banner.set_revealed(True)
+            self.connection_state = "error"
+        elif state == "disconnected":
+            self.status_banner.set_title("Disconnected from SIM Toolkit")
+            self.status_banner.set_revealed(True)
+            self.connection_state = "disconnected"
 
     def setup_stk(self):
-        dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
-        self.bus = dbus.SystemBus()
-        manager = dbus.Interface(self.bus.get_object("org.ofono", "/"), "org.ofono.Manager")
-        modems = manager.GetModems()
-        for path, properties in modems:
-            if "org.ofono.SimToolkit" in properties["Interfaces"]:
-                self.stk = dbus.Interface(self.bus.get_object('org.ofono', path), 'org.ofono.SimToolkit')
-            if "org.ofono.VoiceCallManager" in properties["Interfaces"]:
-                self.vcm = dbus.Interface(self.bus.get_object('org.ofono', path), 'org.ofono.VoiceCallManager')
+        try:
+            dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
+            self.bus = dbus.SystemBus()
+            manager = dbus.Interface(self.bus.get_object("org.ofono", "/"), "org.ofono.Manager")
 
-        if self.stk:
-            self.stk.connect_to_signal("PropertyChanged", self.property_changed)
-            self.properties = self.stk.GetProperties()
-            self.agent = StkAgent(self.bus, self.agent_path, self)
-            self.register_agent()
-            print(f"oFono agent at path {self.agent_path} registered successfully")
-        else:
-            self.properties = []
-
-        if self.vcm:
             try:
-                self.vcm.connect_to_signal("CallAdded", self.agent.call_added)
-            except:
-                print("Failed to connect to signal CallAdded")
+                modems = manager.GetModems()
+            except dbus.exceptions.DBusException as e:
+                self.handle_connection_error("Failed to get modems", str(e))
+                return False
 
-        self.update_ui()
+            modem_found = False
+            for path, properties in modems:
+                modem_found = True
+                if "org.ofono.SimToolkit" in properties["Interfaces"]:
+                    self.stk = dbus.Interface(self.bus.get_object('org.ofono', path), 'org.ofono.SimToolkit')
+                if "org.ofono.VoiceCallManager" in properties["Interfaces"]:
+                    self.vcm = dbus.Interface(self.bus.get_object('org.ofono', path), 'org.ofono.VoiceCallManager')
+
+            if not modem_found:
+                self.handle_connection_error("No modems found", "Please check your modem connection")
+                return False
+
+            if self.stk:
+                try:
+                    self.stk.connect_to_signal("PropertyChanged", self.property_changed)
+                    self.properties = self.stk.GetProperties()
+                    self.agent = StkAgent(self.bus, self.agent_path, self)
+                    self.register_agent()
+                    self.update_connection_status("connected")
+                    print(f"oFono agent at path {self.agent_path} registered successfully")
+                except dbus.exceptions.DBusException as e:
+                    self.handle_connection_error("Failed to setup SIM Toolkit", str(e))
+                    return False
+            else:
+                self.handle_connection_error("SIM Toolkit not available", "SIM Toolkit interface not found on any modem")
+                return False
+
+            if self.vcm:
+                try:
+                    self.vcm.connect_to_signal("CallAdded", self.agent.call_added)
+                except Exception as e:
+                    print(f"Warning: Failed to connect to CallAdded signal: {e}")
+
+            self.update_ui()
+            return False
+        except Exception as e:
+            self.handle_connection_error("Unexpected error during setup", str(e))
+            return False
+
+    def handle_connection_error(self, title: str, details: str):
+        print(f"Connection error: {title} - {details}")
+
+        # Update UI to show error state
+        self.update_connection_status("error", title)
+
+        # Show error status page
+        error_page = ui.create_unavailable_status_page()
+        error_page.set_title("Connection Error")
+        error_page.set_description(f"Connection failed: {title}")
+        self.scrolled_window.set_child(error_page)
+
+        # Enable cancel button, disable select button
+        self.ok_button.set_sensitive(False)
+        self.cancel_button.set_sensitive(True)
 
     def update_ui(self):
         if "MainMenuTitle" in self.properties:
@@ -84,57 +157,88 @@ class StkWindow(Adw.ApplicationWindow):
 
         if "MainMenu" in self.properties and self.properties["MainMenu"]:
             self.scrolled_window.set_child(self.list_box)
-            for index, item in enumerate(self.properties["MainMenu"]):
+            for _index, item in enumerate(self.properties["MainMenu"]):
                 row = ui.setup_main_listbox_item(item[0])
                 self.listbox.append(row)
 
             self.ok_button.set_sensitive(True)
+            self.ok_button.set_label("Select")
             self.cancel_button.set_sensitive(True)
+            self.cancel_button.set_label("Cancel")
+
             if self.listbox.get_row_at_index(0):
                 self.listbox.select_row(self.listbox.get_row_at_index(0))
         else:
             status_page = ui.create_unavailable_status_page()
             self.scrolled_window.set_child(status_page)
             self.ok_button.set_sensitive(False)
-            self.cancel_button.set_sensitive(False)
+            self.cancel_button.set_sensitive(True)
+            self.cancel_button.set_label("Cancel")
 
     def property_changed(self, name, value):
-        print_property_changed(name, value)
-        self.properties[name] = value
-        GLib.idle_add(self.update_ui)
+        try:
+            print_property_changed(name, value)
+            self.properties[name] = value
+            GLib.idle_add(self.update_ui)
+        except Exception as e:
+            print(f"Error handling property change: {e}")
 
     def on_ok_clicked(self, button):
         selected_row = self.listbox.get_selected_row()
-        if selected_row:
-            try:
-                self.stk.SelectItem(selected_row.get_index(), "/appagent")
-            except dbus.exceptions.DBusException as e:
-                ui.create_toast(self.toast_overlay, "Operation in progress. Please wait.")
-                print(f"on_ok_clicked: dbus exception: {e}")
-            except Exception as e:
-                ui.create_toast(self.toast_overlay, f"{e}")
-                print(f"on_ok_clicked: general exception: {e}")
-        else:
+        if not selected_row:
             ui.create_toast(self.toast_overlay, "Please select an item first.")
+            return
 
-    def register_agent(self):
-        try:
-            self.stk.RegisterAgent(self.agent_path)
-        except dbus.exceptions.DBusException as e:
-            ui.create_toast(self.toast_overlay, f"Failed to register agent: {str(e)}")
-            print(f"Failed to register agent: {str(e)}")
+        if self.connection_state != "connected":
+            ui.create_toast(self.toast_overlay, "Not connected to SIM Toolkit")
+            return
 
-    def unregister_agent(self):
         try:
-            self.stk.UnregisterAgent(self.agent_path)
+            button.set_sensitive(False)
+
+            self.stk.SelectItem(selected_row.get_index(), self.agent_path)
         except dbus.exceptions.DBusException as e:
-            ui.create_toast(self.toast_overlay, f"Failed to unregister agent: {str(e)}")
-            print(f"Failed to unregister agent: {str(e)}")
+            button.set_sensitive(True)
+            error_name = e.get_dbus_name() if hasattr(e, 'get_dbus_name') else str(type(e).__name__)
+
+            if "InProgress" in error_name or "Busy" in error_name:
+                ui.create_toast(self.toast_overlay, "Operation in progress. Please wait.")
+            elif "NotSupported" in error_name:
+                ui.create_toast(self.toast_overlay, "This operation is not supported")
+            elif "Failed" in error_name:
+                ui.create_toast(self.toast_overlay, "Operation failed. Please try again.")
+            else:
+                ui.create_toast(self.toast_overlay, f"Error: {str(e)}")
+
+            print(f"D-Bus exception in on_ok_clicked: {e}")
+        except Exception as e:
+            button.set_sensitive(True)
+            ui.create_toast(self.toast_overlay, "An unexpected error occurred")
+            print(f"General exception in on_ok_clicked: {e}")
+        finally:
+            GLib.timeout_add(1000, lambda: button.set_sensitive(True))
 
     def on_cancel_clicked(self, button):
         self.unregister_agent()
         self.register_agent()
         self.navigation_view.pop_to_page(self.main_page)
+
+    def register_agent(self):
+        try:
+            self.stk.RegisterAgent(self.agent_path)
+        except dbus.exceptions.DBusException as e:
+            error_msg = f"Failed to register agent: {str(e)}"
+            ui.create_toast(self.toast_overlay, error_msg)
+            print(error_msg)
+            raise
+
+    def unregister_agent(self):
+        try:
+            if self.stk:
+                self.stk.UnregisterAgent(self.agent_path)
+        except dbus.exceptions.DBusException as e:
+            error_msg = f"Failed to unregister agent: {str(e)}"
+            print(error_msg)
 
     def show_display_text_popup(self, title, reply_func, error_func):
         def on_response(dialog, response):
@@ -143,14 +247,15 @@ class StkWindow(Adw.ApplicationWindow):
             else:
                 GLib.idle_add(reply_func, False)
 
-        dialog = ui.create_display_text_dialog(self, title, on_response)
-        dialog.present()
+        dialog = ui.create_confirmation_dialog("Display Text", title, response_callback=on_response)
+        dialog.present(self)
 
-    def show_input_page(self, title, default, reply_func, error_func, digits_only=False):
+    def show_input_page(self, title, default, min_chars, reply_func, error_func, digits_only=False):
         page = ui.create_non_swipeable_page(title)
 
-        (box, title_label, clamp, entry, button_box,
-         ok_button, cancel_button) = ui.create_input_page_content(title, default, digits_only)
+        (box, header, entry, button_box,
+         ok_button, cancel_button, validation_label) = ui.create_input_page_content(
+            title, default, digits_only)
 
         page.set_child(box)
 
@@ -171,18 +276,18 @@ class StkWindow(Adw.ApplicationWindow):
     def show_selection_page(self, title, items, default, reply_callback, error_callback):
         page = ui.create_non_swipeable_page(title)
 
-        (box, status_page, scrolled_window, listbox, button_box,
+        (box, header, scrolled_window, listbox, button_box,
          ok_button, cancel_button) = ui.create_selection_page_content(title, items)
 
         page.set_child(box)
 
         if 0 <= default < len(items):
             listbox.select_row(listbox.get_row_at_index(default))
-            status_page.set_description(items[default][0])
+            header.set_description(items[default][0])
 
         def on_row_activated(listbox, row):
             listbox.select_row(row)
-            status_page.set_description(items[row.get_index()][0])
+            header.set_description(items[row.get_index()][0])
 
         def on_ok_clicked(button):
             selected_row = listbox.get_selected_row()
@@ -196,8 +301,11 @@ class StkWindow(Adw.ApplicationWindow):
         def on_cancel_clicked(button):
             self.navigation_view.pop()
             GLib.idle_add(reply_callback, dbus.Byte(255))
-            self.unregister_agent()
-            self.register_agent()
+            try:
+                self.unregister_agent()
+                self.register_agent()
+            except Exception as e:
+                print(f"Error refreshing agent: {e}")
 
         listbox.connect("row-activated", on_row_activated)
         ok_button.connect("clicked", on_ok_clicked)
@@ -213,8 +321,21 @@ class StkWindow(Adw.ApplicationWindow):
 
         page.set_child(box)
 
+        def on_text_changed(entry):
+            text = entry.get_text()
+            if text:
+                # Auto-submit on single character
+                if len(text) == 1:
+                    if digits_only and not text.isdigit():
+                        entry.set_text("")
+                        return
+                    GLib.timeout_add(500, lambda: on_ok_clicked(ok_button))
+
         def on_ok_clicked(button):
             key = entry.get_text()
+            if not key:
+                ui.create_toast(self.toast_overlay, "Please enter a key")
+                return
             self.navigation_view.pop()
             GLib.idle_add(reply_func, key)
 
@@ -222,8 +343,11 @@ class StkWindow(Adw.ApplicationWindow):
             self.navigation_view.pop()
             GLib.idle_add(error_func, GoBack("User wishes to go back"))
 
+        entry.connect("notify::text", lambda *args: on_text_changed(entry))
         ok_button.connect("clicked", on_ok_clicked)
         back_button.connect("clicked", on_back_clicked)
+
+        GLib.idle_add(lambda: entry.grab_focus())
 
         self.navigation_view.push(page)
 
@@ -234,15 +358,16 @@ class StkWindow(Adw.ApplicationWindow):
             else:
                 GLib.idle_add(reply_func, False)
 
-        dialog = ui.create_confirmation_dialog(self, title, info, url, on_response)
-        dialog.present()
+        dialog = ui.create_confirmation_dialog(title, info, url, on_response)
+        dialog.present(self)
 
     def show_tone_page(self, tone, text):
         def on_response(dialog, response):
+            # TODO: do something
             pass
 
-        dialog = ui.create_tone_dialog(self, text, tone, on_response)
-        dialog.present()
+        dialog = ui.create_tone_dialog(text, tone, on_response)
+        dialog.present(self)
 
     def show_loop_tone_page(self, tone, text, reply_func, error_func):
         def on_response(dialog, response):
@@ -251,12 +376,12 @@ class StkWindow(Adw.ApplicationWindow):
             else:
                 GLib.idle_add(reply_func, False)
 
-        dialog = ui.create_loop_tone_dialog(self, text, tone, on_response)
-        dialog.present()
+        dialog = ui.create_loop_tone_dialog(text, tone, on_response)
+        dialog.present(self)
 
     def show_action_info_popup(self, text):
-        dialog = ui.create_action_info_dialog(self, text)
-        dialog.present()
+        dialog = ui.create_action_info_dialog(text)
+        dialog.present(self)
 
     def show_action_page(self, text):
         page = ui.create_non_swipeable_page("Action")
@@ -301,3 +426,8 @@ class StkWindow(Adw.ApplicationWindow):
     def pop_to_main_page(self):
         while self.navigation_view.get_visible_page() != self.main_page:
             self.navigation_view.pop()
+
+        # Re-enable buttons
+        if self.connection_state == "connected":
+            self.ok_button.set_sensitive(True)
+        self.cancel_button.set_sensitive(True)

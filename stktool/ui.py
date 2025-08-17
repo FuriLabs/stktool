@@ -1,12 +1,13 @@
 # SPDX-License-Identifier: GPL-2.0
 # Copyright (C) 2025 Bardia Moshiri <bardia@furilabs.com>
 
-import gi
+import re
 from typing import Callable
+
+import gi
 gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
-from gi.repository import Gtk, Adw, Pango
-import re
+from gi.repository import Gtk, Adw
 
 def create_main_window_layout() -> tuple[Adw.ToastOverlay, Adw.NavigationView]:
     """Create the main window layout structure."""
@@ -21,18 +22,31 @@ def create_non_swipeable_page(title: str) -> Adw.NavigationPage:
     page.set_can_pop(False)
     return page
 
-def create_main_page_content() -> tuple[Gtk.Box, Adw.StatusPage, Gtk.ScrolledWindow, Gtk.Box, Gtk.ListBox, Gtk.Box, Gtk.Button, Gtk.Button]:
+def create_main_page_content() -> tuple[Gtk.Box, Adw.StatusPage, Gtk.ScrolledWindow, Gtk.Box, Gtk.ListBox, Gtk.Box, Gtk.Button, Gtk.Button, Adw.Banner]:
     """Create the main page content structure."""
-    main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+    main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+
+    # Status banner
+    status_banner = Adw.Banner()
+    status_banner.set_revealed(False)
+    main_box.append(status_banner)
+
+    # Main content
+    content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+    content_box.set_margin_top(12)
+    content_box.set_margin_bottom(12)
+    content_box.set_margin_start(12)
+    content_box.set_margin_end(12)
+    main_box.append(content_box)
 
     main_menu_title = Adw.StatusPage()
-    main_box.append(main_menu_title)
+    content_box.append(main_menu_title)
 
     scrolled_window = Gtk.ScrolledWindow()
     scrolled_window.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-    scrolled_window.set_min_content_height(400)
+    scrolled_window.set_min_content_height(300)
     scrolled_window.set_vexpand(True)
-    main_box.append(scrolled_window)
+    content_box.append(scrolled_window)
 
     list_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
     scrolled_window.set_child(list_box)
@@ -42,90 +56,142 @@ def create_main_page_content() -> tuple[Gtk.Box, Adw.StatusPage, Gtk.ScrolledWin
     listbox.add_css_class("boxed-list")
     list_box.append(listbox)
 
-    button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+    button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
     button_box.set_margin_top(12)
-    button_box.set_margin_bottom(24)
+    button_box.set_margin_bottom(12)
     button_box.set_halign(Gtk.Align.CENTER)
-    main_box.append(button_box)
+    content_box.append(button_box)
 
-    ok_button = Gtk.Button(label="OK")
+    ok_button = Gtk.Button(label="Select")
+    ok_button.add_css_class("suggested-action")
+    ok_button.add_css_class("pill")
+
     cancel_button = Gtk.Button(label="Cancel")
+    cancel_button.add_css_class("pill")
 
     button_box.append(ok_button)
     button_box.append(cancel_button)
 
-    return main_box, main_menu_title, scrolled_window, list_box, listbox, button_box, ok_button, cancel_button
+    return main_box, main_menu_title, scrolled_window, list_box, listbox, button_box, ok_button, cancel_button, status_banner
 
 def create_unavailable_status_page() -> Adw.StatusPage:
     """Create status page for when STK is unavailable."""
     status_page = Adw.StatusPage()
-    status_page.set_icon_name("dialog-warning-symbolic")
     status_page.set_title("SIM Toolkit Unavailable")
-    status_page.set_description("SIM Toolkit is not available right now")
+    status_page.set_description("No SIM card detected or SIM Toolkit services are not available")
+    status_page.add_css_class("compact")
     return status_page
 
-def create_display_text_dialog(parent, title: str, response_callback: Callable) -> Adw.MessageDialog:
-    """Create display text dialog."""
-    dialog = Adw.MessageDialog.new(parent)
-    dialog.set_heading(title)
+def create_loading_status_page() -> Adw.StatusPage:
+    """Create loading status page."""
+    status_page = Adw.StatusPage()
+    status_page.set_title("Loading...")
+    status_page.set_description("Connecting to SIM Toolkit services")
 
-    dialog.add_response("no", "No")
-    dialog.add_response("yes", "Yes")
-    dialog.set_default_response("no")
-    dialog.set_close_response("no")
+    # Add spinner
+    spinner = Gtk.Spinner()
+    spinner.set_spinning(True)
+    spinner.set_size_request(32, 32)
+    status_page.set_child(spinner)
 
-    dialog.connect("response", response_callback)
-    return dialog
+    return status_page
 
-def create_input_page_content(title: str, default: str, digits_only: bool = False) -> tuple[Gtk.Box, Gtk.Label, Adw.Clamp, Adw.EntryRow, Gtk.Box, Gtk.Button, Gtk.Button]:
+def create_input_page_content(title: str, default: str, digits_only: bool = False) -> tuple[Gtk.Box, Adw.StatusPage, Adw.EntryRow, Gtk.Box, Gtk.Button, Gtk.Button, Gtk.Label]:
     """Create input page content structure."""
-    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+    main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
 
-    title_label = Gtk.Label(label=title)
-    title_label.set_wrap(True)
-    title_label.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
-    title_label.set_max_width_chars(30)
-    title_label.add_css_class("title-4")
-    title_label.set_margin_top(12)
-    title_label.set_margin_bottom(12)
-    title_label.set_margin_start(12)
-    title_label.set_margin_end(12)
+    # Header with icon and title
+    header = Adw.StatusPage()
+    header.set_title(title)
+    header.add_css_class("compact")
+    main_box.append(header)
 
-    clamp = Adw.Clamp()
-    clamp.set_child(title_label)
-    box.append(clamp)
+    # Content area
+    content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+    content_box.set_margin_top(12)
+    content_box.set_margin_bottom(12)
+    content_box.set_margin_start(12)
+    content_box.set_margin_end(12)
+    main_box.append(content_box)
 
     entry = Adw.EntryRow(title="Input")
     entry.set_text(default)
 
     if digits_only:
         entry.set_input_purpose(Gtk.InputPurpose.DIGITS)
-    box.append(entry)
+        entry.set_input_hints(Gtk.InputHints.NO_SPELLCHECK)
 
-    button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+    content_box.append(entry)
+
+    validation_label = Gtk.Label()
+    validation_label.set_visible(False)
+    validation_label.add_css_class("error")
+    validation_label.set_halign(Gtk.Align.START)
+    content_box.append(validation_label)
+
+    button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
     button_box.set_halign(Gtk.Align.END)
-    box.append(button_box)
+    button_box.set_margin_top(12)
+    content_box.append(button_box)
 
-    ok_button = Gtk.Button(label="OK")
+    ok_button = Gtk.Button(label="Confirm")
+    ok_button.add_css_class("suggested-action")
+    ok_button.add_css_class("pill")
+
     cancel_button = Gtk.Button(label="Cancel")
-    button_box.append(ok_button)
-    button_box.append(cancel_button)
+    cancel_button.add_css_class("pill")
 
-    return box, title_label, clamp, entry, button_box, ok_button, cancel_button
+    button_box.append(cancel_button)
+    button_box.append(ok_button)
+
+    def on_text_changed(entry_widget):
+        text = entry_widget.get_text()
+        is_valid = True
+        error_message = ""
+
+        # Digits-only validation
+        if digits_only and text and not text.isdigit():
+            is_valid = False
+            error_message = "Only digits are allowed"
+
+        if is_valid:
+            entry_widget.remove_css_class("error")
+            validation_label.set_visible(False)
+            ok_button.set_sensitive(True)
+        else:
+            entry_widget.add_css_class("error")
+            validation_label.set_text(error_message)
+            validation_label.set_visible(True)
+            ok_button.set_sensitive(False)
+
+    entry.connect("notify::text", lambda *args: on_text_changed(entry))
+
+    on_text_changed(entry)
+
+    return main_box, header, entry, button_box, ok_button, cancel_button, validation_label
 
 def create_selection_page_content(title: str, items: list) -> tuple[Gtk.Box, Adw.StatusPage, Gtk.ScrolledWindow, Gtk.ListBox, Gtk.Box, Gtk.Button, Gtk.Button]:
     """Create selection page content structure."""
-    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+    main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
 
-    status_page = Adw.StatusPage()
-    status_page.set_title(title)
-    box.append(status_page)
+    header = Adw.StatusPage()
+    header.set_title(title)
+    header.add_css_class("compact")
+    main_box.append(header)
+
+    content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+    content_box.set_margin_top(12)
+    content_box.set_margin_bottom(12)
+    content_box.set_margin_start(12)
+    content_box.set_margin_end(12)
+    main_box.append(content_box)
 
     scrolled_window = Gtk.ScrolledWindow()
     scrolled_window.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-    scrolled_window.set_min_content_height(400)
+    scrolled_window.set_min_content_height(200)
+    scrolled_window.set_max_content_height(400)
     scrolled_window.set_vexpand(True)
-    box.append(scrolled_window)
+    content_box.append(scrolled_window)
 
     listbox = Gtk.ListBox()
     listbox.set_selection_mode(Gtk.SelectionMode.SINGLE)
@@ -133,61 +199,90 @@ def create_selection_page_content(title: str, items: list) -> tuple[Gtk.Box, Adw
     scrolled_window.set_child(listbox)
 
     # Populate listbox with items
-    for i, item in enumerate(items):
+    for item in items:
         title_text = re.sub(r'[^A-Za-z0-9 ]+', '', item[0]).strip()
         row = Adw.ActionRow(title=title_text)
         listbox.append(row)
 
-    button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+    button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
     button_box.set_halign(Gtk.Align.CENTER)
     button_box.set_margin_top(12)
-    button_box.set_margin_bottom(24)
-    box.append(button_box)
+    content_box.append(button_box)
 
-    ok_button = Gtk.Button(label="OK")
+    ok_button = Gtk.Button(label="Select")
+    ok_button.add_css_class("suggested-action")
+    ok_button.add_css_class("pill")
+
     cancel_button = Gtk.Button(label="Cancel")
-    button_box.append(ok_button)
+    cancel_button.add_css_class("destructive-action")
+    cancel_button.add_css_class("pill")
+
     button_box.append(cancel_button)
+    button_box.append(ok_button)
 
-    return box, status_page, scrolled_window, listbox, button_box, ok_button, cancel_button
+    return main_box, header, scrolled_window, listbox, button_box, ok_button, cancel_button
 
-def create_key_page_content(title: str, digits_only: bool = False) -> tuple[Gtk.Box, Gtk.Label, Adw.Clamp, Adw.EntryRow, Gtk.Box, Gtk.Button, Gtk.Button]:
+def create_key_page_content(title: str, digits_only: bool = False) -> tuple[Gtk.Box, Adw.StatusPage, Adw.Clamp, Adw.EntryRow, Gtk.Box, Gtk.Button, Gtk.Button]:
     """Create key input page content structure."""
-    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+    main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
 
-    title_label = Gtk.Label(label=title)
-    title_label.set_wrap(True)
-    title_label.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
-    title_label.set_max_width_chars(30)
-    title_label.add_css_class("title-4")
-    title_label.set_margin_top(12)
-    title_label.set_margin_bottom(12)
-    title_label.set_margin_start(12)
-    title_label.set_margin_end(12)
+    # Header
+    header = Adw.StatusPage()
+    header.set_title(title)
+    header.set_description("Press any key" if not digits_only else "Press any digit")
+    header.add_css_class("compact")
+    main_box.append(header)
+
+    # Content area
+    content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+    content_box.set_margin_top(12)
+    content_box.set_margin_bottom(12)
+    content_box.set_margin_start(12)
+    content_box.set_margin_end(12)
+    main_box.append(content_box)
 
     clamp = Adw.Clamp()
-    clamp.set_child(title_label)
-    box.append(clamp)
+    content_box.append(clamp)
 
     entry = Adw.EntryRow(title="Key")
+    entry.set_text("")
     if digits_only:
         entry.set_input_purpose(Gtk.InputPurpose.DIGITS)
-    box.append(entry)
+        entry.set_input_hints(Gtk.InputHints.NO_SPELLCHECK)
 
-    button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+    clamp.set_child(entry)
+
+    button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
     button_box.set_halign(Gtk.Align.END)
-    box.append(button_box)
+    button_box.set_margin_top(12)
+    content_box.append(button_box)
 
-    ok_button = Gtk.Button(label="OK")
     back_button = Gtk.Button(label="Back")
-    button_box.append(ok_button)
+    back_button.add_css_class("pill")
+
+    ok_button = Gtk.Button(label="Confirm")
+    ok_button.add_css_class("suggested-action")
+    ok_button.add_css_class("pill")
+
     button_box.append(back_button)
+    button_box.append(ok_button)
 
-    return box, title_label, clamp, entry, button_box, ok_button, back_button
+    return main_box, header, clamp, entry, button_box, ok_button, back_button
 
-def create_confirmation_dialog(parent, title: str, info: str = None, url: str = None, response_callback: Callable = None) -> Adw.MessageDialog:
+def create_window_controls(window):
+    """Set up window behavior."""
+    window.set_title("SIM Toolkit")
+
+def create_toast(toast_overlay: Adw.ToastOverlay, message: str, duration: int = 3):
+    """Create toast message."""
+    toast = Adw.Toast(title=message)
+    toast.set_timeout(duration)
+    toast_overlay.add_toast(toast)
+    return toast
+
+def create_confirmation_dialog(title: str, info: str = None, url: str = None, response_callback: Callable = None) -> Adw.AlertDialog:
     """Create confirmation dialog."""
-    dialog = Adw.MessageDialog.new(parent)
+    dialog = Adw.AlertDialog()
     dialog.set_heading(title)
 
     body_text = ""
@@ -201,23 +296,26 @@ def create_confirmation_dialog(parent, title: str, info: str = None, url: str = 
     if body_text:
         dialog.set_body(body_text)
 
-    dialog.add_response("no", "No")
-    dialog.add_response("yes", "Yes")
-    dialog.set_default_response("no")
-    dialog.set_close_response("no")
+    dialog.add_response("cancel", "Cancel")
+    dialog.add_response("confirm", "Confirm")
+    dialog.set_response_appearance("confirm", Adw.ResponseAppearance.SUGGESTED)
+    dialog.set_default_response("cancel")
+    dialog.set_close_response("cancel")
 
     if response_callback:
-        dialog.connect("response", response_callback)
+        def handle_response(dialog, response):
+            response_callback(dialog, "yes" if response == "confirm" else "no")
+        dialog.connect("response", handle_response)
 
     return dialog
 
-def create_tone_dialog(parent, text: str, tone: str = None, response_callback: Callable = None) -> Adw.MessageDialog:
+def create_tone_dialog(text: str, tone: str = None, response_callback: Callable = None) -> Adw.AlertDialog:
     """Create tone dialog."""
-    dialog = Adw.MessageDialog.new(parent)
+    dialog = Adw.AlertDialog()
     dialog.set_heading(text)
 
     if tone:
-        dialog.set_body(tone)
+        dialog.set_body(f"Tone: {tone}")
 
     dialog.add_response("end", "End Tone")
     dialog.set_default_response("end")
@@ -228,16 +326,17 @@ def create_tone_dialog(parent, text: str, tone: str = None, response_callback: C
 
     return dialog
 
-def create_loop_tone_dialog(parent, text: str, tone: str = None, response_callback: Callable = None) -> Adw.MessageDialog:
+def create_loop_tone_dialog(text: str, tone: str = None, response_callback: Callable = None) -> Adw.AlertDialog:
     """Create loop tone dialog."""
-    dialog = Adw.MessageDialog.new(parent)
+    dialog = Adw.AlertDialog()
     dialog.set_heading(text)
 
     if tone:
-        dialog.set_body(tone)
+        dialog.set_body(f"Tone: {tone}")
 
     dialog.add_response("wait", "Wait")
     dialog.add_response("end", "End Tone")
+    dialog.set_response_appearance("wait", Adw.ResponseAppearance.SUGGESTED)
     dialog.set_default_response("end")
     dialog.set_close_response("end")
 
@@ -246,10 +345,11 @@ def create_loop_tone_dialog(parent, text: str, tone: str = None, response_callba
 
     return dialog
 
-def create_action_info_dialog(parent, text: str) -> Adw.MessageDialog:
+def create_action_info_dialog(text: str) -> Adw.AlertDialog:
     """Create action info dialog."""
-    dialog = Adw.MessageDialog.new(parent)
-    dialog.set_heading(text)
+    dialog = Adw.AlertDialog()
+    dialog.set_heading("Action Information")
+    dialog.set_body(text)
 
     dialog.add_response("ok", "OK")
     dialog.set_default_response("ok")
@@ -259,51 +359,60 @@ def create_action_info_dialog(parent, text: str) -> Adw.MessageDialog:
 
 def create_action_page_content(text: str) -> tuple[Gtk.Box, Adw.StatusPage, Gtk.Box, Gtk.Button]:
     """Create action page content structure."""
-    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+    main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+    main_box.set_margin_top(12)
+    main_box.set_margin_bottom(12)
+    main_box.set_margin_start(12)
+    main_box.set_margin_end(12)
 
-    status_page = Adw.StatusPage(
-        title="Action",
-        description=f"Text: {text}"
-    )
-    box.append(status_page)
+    status_page = Adw.StatusPage()
+    status_page.set_title("Action")
+    status_page.set_description(text)
+    main_box.append(status_page)
 
     button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-    button_box.set_halign(Gtk.Align.END)
-    box.append(button_box)
+    button_box.set_halign(Gtk.Align.CENTER)
+    main_box.append(button_box)
 
-    ok_button = Gtk.Button(label="OK")
+    ok_button = Gtk.Button(label="Continue")
+    ok_button.add_css_class("suggested-action")
+    ok_button.add_css_class("pill")
     button_box.append(ok_button)
 
-    return box, status_page, button_box, ok_button
+    return main_box, status_page, button_box, ok_button
 
 def create_confirm_open_channel_page_content(info: str) -> tuple[Gtk.Box, Adw.StatusPage, Gtk.Box, Gtk.Button, Gtk.Button]:
     """Create confirm open channel page content structure."""
-    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+    main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+    main_box.set_margin_top(12)
+    main_box.set_margin_bottom(12)
+    main_box.set_margin_start(12)
+    main_box.set_margin_end(12)
 
-    status_page = Adw.StatusPage(
-        title="Confirm Open Channel",
-        description=f"Information: {info}"
-    )
-    box.append(status_page)
+    status_page = Adw.StatusPage()
+    status_page.set_title("Confirm Open Channel")
+    status_page.set_description(info)
+    main_box.append(status_page)
 
-    button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-    button_box.set_halign(Gtk.Align.END)
-    box.append(button_box)
+    button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+    button_box.set_halign(Gtk.Align.CENTER)
+    main_box.append(button_box)
 
-    yes_button = Gtk.Button(label="Yes")
-    no_button = Gtk.Button(label="No")
-    button_box.append(yes_button)
+    no_button = Gtk.Button(label="Deny")
+    no_button.add_css_class("destructive-action")
+    no_button.add_css_class("pill")
+
+    yes_button = Gtk.Button(label="Allow")
+    yes_button.add_css_class("suggested-action")
+    yes_button.add_css_class("pill")
+
     button_box.append(no_button)
+    button_box.append(yes_button)
 
-    return box, status_page, button_box, yes_button, no_button
-
-def create_toast(toast_overlay: Adw.ToastOverlay, message: str, duration: int = 3):
-    """Create and show a toast message."""
-    toast = Adw.Toast(title=message)
-    toast_overlay.add_toast(toast)
-    return toast
+    return main_box, status_page, button_box, yes_button, no_button
 
 def setup_main_listbox_item(item_text: str) -> Adw.ActionRow:
-    """Create a main menu listbox item."""
+    """Create main menu listbox item."""
     row = Adw.ActionRow(title=item_text)
+    row.set_activatable(True)
     return row
