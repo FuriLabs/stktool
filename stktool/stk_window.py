@@ -10,6 +10,7 @@ import dbus
 import dbus.mainloop.glib
 
 from stktool.ofono_stk_agent import StkAgent, GoBack, EndSession, Busy
+from stktool.utils import print_property_changed
 from stktool import ui
 
 class StkWindow(Adw.ApplicationWindow):
@@ -62,6 +63,7 @@ class StkWindow(Adw.ApplicationWindow):
             self.properties = self.stk.GetProperties()
             self.agent = StkAgent(self.bus, self.agent_path, self)
             self.register_agent()
+            print(f"oFono agent at path {self.agent_path} registered successfully")
         else:
             self.properties = []
 
@@ -97,6 +99,7 @@ class StkWindow(Adw.ApplicationWindow):
             self.cancel_button.set_sensitive(False)
 
     def property_changed(self, name, value):
+        print_property_changed(name, value)
         self.properties[name] = value
         GLib.idle_add(self.update_ui)
 
