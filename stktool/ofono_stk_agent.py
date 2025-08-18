@@ -134,7 +134,10 @@ class StkAgent(dbus.service.Object):
             if not default:
                 default = ""
 
-            self.window.show_input_page(title, default, min_chars, reply_func, error_func)
+            min_chars_converted = int(min_chars) if min_chars is not None else 0
+            max_chars_converted = int(max_chars) if max_chars is not None else 0
+
+            self.window.show_input_page(title, default, min_chars_converted, reply_func, error_func)
         except Exception as e:
             self.active_operations = max(0, self.active_operations - 1)
             self._handle_method_error("RequestInput", e, error_func)
@@ -164,7 +167,10 @@ class StkAgent(dbus.service.Object):
             else:
                 default = str(default) if default else ""
 
-            self.window.show_input_page(title, default, min_chars, reply_func, error_func, digits_only=True)
+            min_chars_converted = int(min_chars) if min_chars is not None else 0
+            max_chars_converted = int(max_chars) if max_chars is not None else 0
+
+            self.window.show_input_page(title, default, min_chars_converted, reply_func, error_func, digits_only=True)
         except Exception as e:
             self.active_operations = max(0, self.active_operations - 1)
             self._handle_method_error("RequestDigits", e, error_func)
