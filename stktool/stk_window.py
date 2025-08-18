@@ -72,14 +72,17 @@ class StkWindow(Adw.ApplicationWindow):
             self.status_banner.set_title("Connected to SIM Toolkit")
             self.status_banner.set_revealed(False)
             self.connection_state = "connected"
+            self.cancel_button.set_sensitive(True)
         elif state == "error":
             self.status_banner.set_title(f"Connection Error: {message}")
             self.status_banner.set_revealed(True)
             self.connection_state = "error"
+            self.cancel_button.set_sensitive(False)
         elif state == "disconnected":
             self.status_banner.set_title("Disconnected from SIM Toolkit")
             self.status_banner.set_revealed(True)
             self.connection_state = "disconnected"
+            self.cancel_button.set_sensitive(False)
 
     def setup_stk(self):
         try:
@@ -144,9 +147,9 @@ class StkWindow(Adw.ApplicationWindow):
         error_page.set_description(f"Connection failed: {title}")
         self.scrolled_window.set_child(error_page)
 
-        # Enable cancel button, disable select button
+        # Disable both buttons
         self.ok_button.set_sensitive(False)
-        self.cancel_button.set_sensitive(True)
+        self.cancel_button.set_sensitive(False)
 
     def update_ui(self):
         if "MainMenuTitle" in self.properties:
@@ -172,10 +175,12 @@ class StkWindow(Adw.ApplicationWindow):
                 row = ui.setup_main_listbox_item(item[0])
                 self.listbox.append(row)
 
-            self.ok_button.set_sensitive(True)
-            self.ok_button.set_label("Select")
-            self.cancel_button.set_sensitive(True)
-            self.cancel_button.set_label("Cancel")
+            if self.connection_state == "connected":
+                self.ok_button.set_sensitive(True)
+                self.cancel_button.set_sensitive(True)
+            else:
+                self.ok_button.set_sensitive(False)
+                self.cancel_button.set_sensitive(False)
 
             if self.listbox.get_row_at_index(0):
                 self.listbox.select_row(self.listbox.get_row_at_index(0))
@@ -183,7 +188,7 @@ class StkWindow(Adw.ApplicationWindow):
             status_page = ui.create_unavailable_status_page()
             self.scrolled_window.set_child(status_page)
             self.ok_button.set_sensitive(False)
-            self.cancel_button.set_sensitive(True)
+            self.cancel_button.set_sensitive(False)
             self.cancel_button.set_label("Cancel")
 
     def property_changed(self, name, value):
@@ -230,11 +235,21 @@ class StkWindow(Adw.ApplicationWindow):
             GLib.timeout_add(1000, lambda: button.set_sensitive(True))
 
     def on_cancel_clicked(self, button):
-        self.unregister_agent()
-        self.register_agent()
-        self.navigation_view.pop_to_page(self.main_page)
+        if self.connection_state != "connected" or not self.stk:
+            print("Cancel clicked but not connected to STK - ignoring")
+            return
+        try:
+            self.unregister_agent()
+            self.register_agent()
+            self.navigation_view.pop_to_page(self.main_page)
+        except Exception as e:
+            print(f"Error in cancel operation: {e}")
 
     def register_agent(self):
+        if not self.stk:
+            print("Cannot register agent: STK interface not available")
+            return
+
         try:
             self.stk.RegisterAgent(self.agent_path)
         except dbus.exceptions.DBusException as e:
@@ -244,9 +259,12 @@ class StkWindow(Adw.ApplicationWindow):
             raise
 
     def unregister_agent(self):
+        if not self.stk:
+            print("Cannot unregister agent: STK interface not available")
+            return
+
         try:
-            if self.stk:
-                self.stk.UnregisterAgent(self.agent_path)
+            self.stk.UnregisterAgent(self.agent_path)
         except dbus.exceptions.DBusException as e:
             error_msg = f"Failed to unregister agent: {str(e)}"
             print(error_msg)
@@ -482,7 +500,9 @@ class StkWindow(Adw.ApplicationWindow):
         while self.navigation_view.get_visible_page() != self.main_page:
             self.navigation_view.pop()
 
-        # Re-enable buttons
         if self.connection_state == "connected":
             self.ok_button.set_sensitive(True)
-        self.cancel_button.set_sensitive(True)
+            self.cancel_button.set_sensitive(True)
+        else:
+            self.ok_button.set_sensitive(False)
+            self.cancel_button.set_sensitive(False)
