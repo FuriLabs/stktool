@@ -19,4 +19,5 @@ Depends: ${misc:Depends},
          gir1.2-adw-1,
          gir1.2-glib-2.0,
          python3-dbus,
+         python3-bs4,
 Description: SIM-Handset Interface & Terminal (SHIT) for FuriOS
