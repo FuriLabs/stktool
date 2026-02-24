@@ -22,14 +22,14 @@ install:
 
 	install -m 755 main.py $(DESTDIR)$(INSTALL_DIR)/
 
-	install -m 644 data/io.FuriOS.StkTool.desktop $(DESTDIR)$(DESKTOP_DIR)/
-	install -m 644 data/io.FuriOS.StkTool.svg $(DESTDIR)$(ICON_DIR)/
+	install -m 644 data/io.furios.StkTool.desktop $(DESTDIR)$(DESKTOP_DIR)/
+	install -m 644 data/io.furios.StkTool.svg $(DESTDIR)$(ICON_DIR)/
 
-	ln -sf ../lib/stktool/main.py $(DESTDIR)$(BINDIR)/io.FuriOS.StkTool
+	ln -sf ../lib/stktool/main.py $(DESTDIR)$(BINDIR)/io.furios.StkTool
 
 uninstall:
-	rm -f $(DESTDIR)$(BINDIR)/io.FuriOS.StkTool
+	rm -f $(DESTDIR)$(BINDIR)/io.furios.StkTool
 
 	rm -rf $(DESTDIR)$(INSTALL_DIR)
-	rm -f $(DESTDIR)$(DESKTOP_DIR)/io.FuriOS.StkTool.desktop
-	rm -f $(DESTDIR)$(ICON_DIR)/io.FuriOS.StkTool.svg
+	rm -f $(DESTDIR)$(DESKTOP_DIR)/io.furios.StkTool.desktop
+	rm -f $(DESTDIR)$(ICON_DIR)/io.furios.StkTool.svg

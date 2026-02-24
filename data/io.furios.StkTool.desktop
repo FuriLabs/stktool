@@ -1,8 +1,8 @@
 [Desktop Entry]
 Type=Application
 Name=StkTool
-Exec=io.FuriOS.StkTool
-Icon=io.FuriOS.StkTool
+Exec=io.furios.StkTool
+Icon=io.furios.StkTool
 Terminal=false
 Type=Application
 StartupNotify=true

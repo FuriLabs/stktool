@@ -9,7 +9,7 @@ from stktool.stk_window import StkWindow
 
 class StkApp(Adw.Application):
     def __init__(self):
-        super().__init__(application_id='io.FuriOS.StkTool')
+        super().__init__(application_id='io.furios.StkTool')
         self.connect('activate', self.on_activate)
 
     def on_activate(self, app):
