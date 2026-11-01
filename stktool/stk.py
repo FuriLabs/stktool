@@ -67,6 +67,7 @@ class Stk(Adw.Application):
                 self.unregister_agent()
         except Exception as e:
             print(f"Error during cleanup: {e}")
+        self.win = None
         return False
 
     def show_loading_state(self, message: str):
@@ -486,22 +487,24 @@ class Stk(Adw.Application):
         page.set_child(box)
 
         result = [False]
+        loop = GLib.MainLoop()
 
         def on_yes_clicked(button):
             result[0] = True
             self.navigation_view.pop()
+            loop.quit()
 
         def on_no_clicked(button):
             result[0] = False
             self.navigation_view.pop()
+            loop.quit()
 
         yes_button.connect("clicked", on_yes_clicked)
         no_button.connect("clicked", on_no_clicked)
 
         self.navigation_view.push(page)
 
-        while self.navigation_view.get_visible_page() == page:
-            Gtk.main_iteration()
+        loop.run()
 
         return result[0]
 
