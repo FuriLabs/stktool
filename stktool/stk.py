@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: GPL-2.0
 # Copyright (C) 2025 Bardia Moshiri <bardia@furilabs.com>
 
+import subprocess
+
 import gi
 gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
@@ -420,6 +422,13 @@ class Stk(Adw.Application):
     def show_confirmation_popup(self, title, reply_func, error_func, info=None, url=None):
         def on_response(dialog, response):
             if response == "yes":
+                if title == "Confirm Launch Browser" and url and url != "Unknown URL":
+                    try:
+                        subprocess.Popen(["xdg-open", url])
+                    except OSError as e:
+                        print(f"Failed to launch browser: {e}")
+                        return
+
                 GLib.idle_add(reply_func, True)
             else:
                 GLib.idle_add(reply_func, False)
